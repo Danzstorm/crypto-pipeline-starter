@@ -1,0 +1,21 @@
+resources:
+  schemas:
+    raw:
+      catalog_name: ${var.catalog}
+      name: raw
+      comment: "Landing zone — archivos crudos desde el ingester local"
+
+    bronze:
+      catalog_name: ${var.catalog}
+      name: bronze
+      comment: "Bronze — append-only, payload sin tipar"
+
+    silver:
+      catalog_name: ${var.catalog}
+      name: silver
+      comment: "Silver — tipado, validado, deduplicado"
+
+    gold:
+      catalog_name: ${var.catalog}
+      name: gold
+      comment: "Gold — KPIs y vistas materializadas"

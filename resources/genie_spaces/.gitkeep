@@ -1,0 +1,3 @@
+# Esta carpeta se llenará cuando uses Claude Code para crear el Genie Space
+# vía MCP. El recurso `genie_spaces` en DAB todavía no es estable en todas
+# las versiones de CLI, por eso lo creamos vía MCP en el flujo del Paso 23.

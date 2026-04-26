@@ -1,0 +1,26 @@
+bundle:
+  name: crypto_pipeline
+
+include:
+  - resources/schemas/*.yml
+  - resources/volumes/*.yml
+  - resources/pipelines/*.yml
+  - resources/jobs/*.yml
+  - resources/dashboards/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog donde viven todas las tablas del proyecto
+    default: crypto
+  notification_email:
+    description: Email para alertas del Job orquestador
+    default: ${workspace.current_user.userName}
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: ${workspace.host}
+    run_as:
+      user_name: ${workspace.current_user.userName}

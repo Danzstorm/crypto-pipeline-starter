@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+
+# Databricks
+.databricks/
+*.databrickscfg
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs y temporales
+*.log
+/tmp/
+.cache/
+
+# Outputs locales del ingester (suben al Volume, no al repo)
+ingest-output/
+
+# Secrets
+.env
+.env.local
+*.pem
+*.key

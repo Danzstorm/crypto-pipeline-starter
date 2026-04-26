@@ -1,0 +1,8 @@
+resources:
+  volumes:
+    coin_prices:
+      catalog_name: ${var.catalog}
+      schema_name: raw
+      name: coin_prices
+      volume_type: MANAGED
+      comment: "Landing del ingester local — archivos JSONL particionados por dt y hh"

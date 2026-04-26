@@ -1,0 +1,20 @@
+resources:
+  jobs:
+    crypto_orchestrator:
+      name: crypto_orchestrator_${bundle.target}
+
+      schedule:
+        quartz_cron_expression: "0 */15 * * * ?"
+        timezone_id: America/Lima
+        pause_status: PAUSED
+
+      email_notifications:
+        on_failure:
+          - ${var.notification_email}
+        on_success: []
+
+      tasks:
+        - task_key: refresh_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.crypto_medallion.id}
+            full_refresh: false

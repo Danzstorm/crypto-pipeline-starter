@@ -1,0 +1,21 @@
+resources:
+  pipelines:
+    crypto_medallion:
+      name: crypto_medallion_${bundle.target}
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true
+      channel: PREVIEW
+      edition: ADVANCED
+      development: ${bundle.target == 'dev'}
+
+      libraries:
+        - file:
+            path: ../../src/pipelines/01_bronze.py
+        - file:
+            path: ../../src/pipelines/02_silver.py
+        - file:
+            path: ../../src/pipelines/03_gold.py
+
+      configuration:
+        pipelines.enableTrackHistory: "true"

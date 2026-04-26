@@ -1,0 +1,3 @@
+# Esta carpeta se llenará cuando uses Claude Code para crear el AI/BI Dashboard
+# vía MCP. Si en el futuro Databricks expone dashboards completamente como
+# recurso DAB, aquí declarás el YAML.

@@ -20,6 +20,6 @@ targets:
     mode: development
     default: true
     workspace:
-      host: ${workspace.host}
+      host: https://dbc-ef0fd52d-2953.cloud.databricks.com
     run_as:
       user_name: ${workspace.current_user.userName}

@@ -1,8 +1,8 @@
-# Guía de implementación v2 — Pipeline crypto end-to-end en Databricks Free Edition
+# Guía de implementación — Pipeline crypto end-to-end en Databricks Free Edition
 
-Esta guía te lleva paso a paso desde cero hasta tener un pipeline financiero completo de criptomonedas corriendo en Databricks Free Edition. Asume que descargaste el `crypto-pipeline-starter` v2 (zip o `git clone`) y todos los archivos de código, specs y bundle ya están escritos.
+Esta guía te lleva paso a paso desde cero hasta tener un pipeline financiero completo de criptomonedas corriendo en Databricks Free Edition. Asume que descargaste el `crypto-pipeline-starter` (zip o `git clone`) y todos los archivos de código, specs y bundle ya están escritos.
 
-> **Importante:** este documento NO contiene anexos con código embebido. La fuente de verdad de cada archivo es el archivo mismo en el starter. Si modificas algo, modifícalo en el archivo, no en esta guía.
+> **Importante:** este documento NO contiene fragmentos de código embebidos para copiar al pipeline. La fuente de verdad de cada archivo del pipeline es el archivo mismo en el starter. Si modificas algo, modifícalo en el archivo, no en esta guía.
 
 ## Tabla de contenidos
 
@@ -57,7 +57,17 @@ Es una clase Python que extiende `pyspark.sql.datasource.DataSource` y le enseñ
 
 En este proyecto, `CoinGeckoDataSource` (en `src/pipelines/01_bronze.py`) implementa la captura: cada vez que el pipeline corre, esta clase llama a la API de CoinGecko, recibe los precios de las 100 monedas top, y los emite como filas con un `snapshot_id` (timestamp UTC común para todas las filas de esa captura).
 
-Este patrón reemplaza al ingester local que existía en la v1.
+### ¿Qué es el ai-dev-kit y para qué sirve?
+
+Es un instalador de Databricks que configura Claude Code con dos cosas:
+- `.claude/skills/` — documentación técnica de Databricks que Claude Code usa como contexto al responder.
+- `.mcp.json` — configuración del MCP server local que permite a Claude Code ejecutar acciones en tu workspace (queries SQL, deploy de bundles, gestión de recursos).
+
+**Importante:** el ai-dev-kit debe instalarse desde dentro de la carpeta del proyecto, no desde otra carpeta. Si se instala en el lugar equivocado, Claude Code no carga las skills ni el MCP.
+
+### ¿Qué es el perfil CLI `crypto`?
+
+Es un nombre que le damos a la conexión entre la CLI y tu workspace. El perfil agrupa: URL del workspace + PAT. Puedes llamarlo como quieras; `crypto` es la convención de este proyecto para que todos los comandos sean consistentes.
 
 ### ¿Necesitas GitHub?
 
@@ -65,16 +75,16 @@ No estrictamente. Necesitas Git local para versionar tus cambios. GitHub es opci
 
 ### ¿Por qué validamos primero CoinGecko?
 
-Free Edition restringe el outbound del cómputo serverless a un set de dominios "trusted". Si CoinGecko cae fuera de esa lista en tu workspace específico, todo el pipeline falla en Bronze. Por eso la Parte C corre un notebook de prueba antes del primer deploy: si pasa, sigues con la guía. Si falla, hay que cambiar a la arquitectura v1 (con ingester local).
+Free Edition restringe el outbound del cómputo serverless a un set de dominios. Si CoinGecko no es alcanzable desde tu workspace específico, el pipeline falla en Bronze. Por eso la Parte C corre un notebook de prueba antes del primer deploy: si pasa, sigues. Si falla, hay que cambiar de arquitectura.
 
 ---
 
 ## Pre-requisitos
 
-- Computadora con macOS, Linux, o Windows.
+- Computadora con Windows, macOS, o Linux.
 - Email para registrarte en Databricks Free Edition.
 - Cuenta Anthropic con créditos para Claude Code.
-- Vas a instalar: Databricks CLI, `uv`, Python 3.10+, Claude Code, Git.
+- Vas a instalar: Databricks CLI, `uv`, Claude Code, Git.
 
 ---
 
@@ -82,47 +92,51 @@ Free Edition restringe el outbound del cómputo serverless a un set de dominios 
 
 ### A.1 Crear cuenta Databricks Free Edition
 
-1. https://signup.databricks.com → Express Setup.
+1. Ve a https://signup.databricks.com → Express Setup.
 2. Verifica el email.
-3. Anota la URL del workspace (ej. `https://dbc-xxxxxxxx-xxxx.cloud.databricks.com`).
+3. **Anota la URL de tu workspace** (ej. `https://dbc-xxxxxxxx-xxxx.cloud.databricks.com`). La necesitarás en varios pasos.
 
 ### A.2 Generar Personal Access Token (PAT)
 
-1. Avatar → Settings → Developer → Access tokens → Manage → Generate new token.
+1. En tu workspace: avatar (arriba derecha) → **Settings** → **Developer** → **Access tokens** → **Manage** → **Generate new token**.
 2. Comment: `crypto-pipeline-laptop`. Lifetime: `90` días.
-3. **Copia el token y guárdalo.** No se vuelve a mostrar.
+3. **Copia el token y guárdalo ahora.** No se vuelve a mostrar.
 
 ### A.3 Instalar Databricks CLI
-
-**macOS / Linux:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
-```
 
 **Windows (PowerShell):**
 ```powershell
 winget install Databricks.DatabricksCLI
 ```
 
-Verifica: `databricks --version` (debe ser 0.250.0 o superior).
+**macOS / Linux:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+```
+
+Verifica: `databricks --version` debe mostrar `0.278.0` o superior. Si es más vieja, actualiza con el mismo comando de instalación.
 
 ### A.4 Instalar `uv`
 
-**macOS / Linux:**
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
+`uv` es el gestor de entornos Python que usa el ai-dev-kit internamente.
 
 **Windows (PowerShell):**
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
+**macOS / Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Verifica en una terminal nueva: `uv --version`.
+
 ### A.5 Instalar Claude Code
 
-1. Visita https://claude.ai/code y sigue las instrucciones.
-2. Autentica con `claude` (te lleva al navegador).
-3. Verifica: `claude --version`.
+Sigue las instrucciones en https://claude.ai/code. Puedes usar la extensión de VS Code (recomendada para Windows) o el CLI.
+
+Verifica que puedes abrir Claude Code y chatear con él.
 
 ### A.6 Configurar perfil CLI
 
@@ -131,7 +145,7 @@ databricks configure --profile crypto --token
 ```
 
 Cuando pregunte:
-- **Host:** la URL del workspace.
+- **Host:** la URL del workspace que anotaste en A.1.
 - **Token:** el PAT del paso A.2.
 
 Verifica:
@@ -139,7 +153,7 @@ Verifica:
 databricks current-user me --profile crypto
 ```
 
-Debe devolver tu email.
+Debe devolver tu email. Si lo hace, el perfil está bien configurado.
 
 ---
 
@@ -148,71 +162,95 @@ Debe devolver tu email.
 ### B.1 Obtener el starter
 
 **Opción 1 (recomendada): clone desde GitHub**
-
 ```powershell
 git clone https://github.com/<tu-usuario>/crypto-pipeline-starter
-cd crypto-pipeline-starter
 ```
 
 **Opción 2: descomprimir el zip**
-
-Si descargaste el zip:
 ```powershell
-# Asume que el zip está en Downloads
-cd "D:\Daniel\AI Data Engineer Bootcamp\webinar"
 Expand-Archive -Path "$env:USERPROFILE\Downloads\crypto-pipeline-starter.zip" -DestinationPath .
+```
+
+Entra a la carpeta del proyecto:
+```powershell
 cd crypto-pipeline-starter
 ```
 
-A partir de aquí, todos los comandos asumen que estás dentro de la carpeta del proyecto.
+**A partir de aquí, todos los comandos de esta guía asumen que estás dentro de `crypto-pipeline-starter`.**
 
-### B.2 Instalar el `ai-dev-kit`
+### B.2 Configurar el host del workspace en el bundle
 
+Abre `databricks.yml` y reemplaza el valor del `host` con la URL real de tu workspace:
+
+```yaml
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-xxxxxxxx-xxxx.cloud.databricks.com   # ← tu URL aquí
+```
+
+Guarda el archivo. Este paso es necesario para que `databricks bundle validate` pueda conectarse al workspace correcto.
+
+### B.3 Instalar el ai-dev-kit
+
+> **Requisito previo:** este comando debe ejecutarse desde dentro de la carpeta `crypto-pipeline-starter`. Si lo corres desde otra carpeta, el instalador crea los archivos en el lugar equivocado y Claude Code no los carga.
+
+**Windows (PowerShell):**
 ```powershell
+irm https://raw.githubusercontent.com/databricks-solutions/ai-dev-kit/main/install.ps1 | iex
+```
+
+**macOS / Linux:**
+```bash
 bash <(curl -sL https://raw.githubusercontent.com/databricks-solutions/ai-dev-kit/main/install.sh) --profile crypto
 ```
 
-> En Windows PowerShell, si el comando con `bash <(...)` no funciona, instala Git Bash (viene con Git for Windows) y corre el comando ahí. O alternativamente:
-> ```powershell
-> curl -sL https://raw.githubusercontent.com/databricks-solutions/ai-dev-kit/main/install.sh -o install.sh
-> bash install.sh --profile crypto
-> Remove-Item install.sh
-> ```
+En el instalador interactivo elige:
+- **Tool:** Claude Code
+- **Scope:** Project
+- **Skills profile:** Data Engineer (o All)
+- **Profile:** `crypto`
+- Confirma con `y`
 
-Cuando pregunte por tools, selecciona `claude`.
+El instalador crea dentro de `crypto-pipeline-starter`:
+- `.claude/skills/` — skills de Databricks para Claude Code.
+- `.mcp.json` — configuración del MCP server apuntando al perfil `crypto`.
 
-El instalador crea:
-- `.claude/skills/` con 19 skills de Databricks.
-- `.mcp.json` para conectar Claude Code al MCP server local.
-
-### B.3 Verificar el MCP
-
+Verifica que los archivos existen:
 ```powershell
-claude
+# Windows
+Test-Path .mcp.json
+Test-Path .claude/skills
+
+# macOS / Linux
+ls -la .mcp.json .claude/skills
 ```
 
-Dentro de Claude Code:
+### B.4 Verificar el MCP desde Claude Code
+
+Abre Claude Code en la carpeta del proyecto. En el chat, escribe:
+
 ```
 /mcp
 ```
 
-Debe mostrar:
-```
-databricks: connected ✓
-```
+Debe aparecer el servidor `databricks` como conectado. Luego prueba:
 
-Prueba:
 ```
 Lista mis SQL warehouses usando el MCP de Databricks.
 ```
 
-Si responde con la lista, todo está conectado. Sal con `/exit`.
+Si Claude Code responde con la lista de warehouses, el MCP está funcionando correctamente.
 
-### B.4 Commit del setup (si es repo Git)
+> Nota: `/mcp` es un comando de Claude Code que se escribe en el chat, no en la terminal de PowerShell.
+
+### B.5 Commit del setup (si es repo Git)
 
 ```powershell
 git add .
-git commit -m "feat: install ai-dev-kit"
+git commit -m "feat: install ai-dev-kit and configure workspace host"
 git push
 ```
 
@@ -220,7 +258,7 @@ git push
 
 ## Parte C — Validar conectividad a CoinGecko
 
-> **Esta parte es nueva en v2 y es crítica.** No la saltes. Si CoinGecko no es alcanzable desde tu workspace específico, el pipeline va a fallar y tendrás que cambiar de arquitectura.
+> Esta parte es crítica. No la saltes. Si CoinGecko no es alcanzable desde tu workspace específico, el pipeline fallará en Bronze.
 
 ### C.1 Subir el notebook de validación a Databricks
 
@@ -229,13 +267,11 @@ git push
 3. Selecciona `tests/integration/test_coingecko_databricks.py` desde tu carpeta local.
 4. **Import format:** Source.
 
-Alternativa: abrir el archivo en VS Code, copiar todo, y crear un notebook nuevo en Databricks pegando el contenido.
-
 ### C.2 Ejecutar el notebook
 
 1. Abre el notebook recién importado.
-2. **Connect** → **Serverless** (es la única opción en Free Edition).
-3. **Run all** en la barra superior.
+2. **Connect** → **Serverless**.
+3. **Run all**.
 
 El notebook ejecuta cuatro tests:
 
@@ -246,21 +282,18 @@ El notebook ejecuta cuatro tests:
 
 ### C.3 Interpretar los resultados
 
-**Si los 4 tests pasan:** sigue con la Parte D. CoinGecko es alcanzable, el resto de la guía aplica tal cual.
+**Si los 4 tests pasan:** sigue con la Parte D.
 
-**Si Test 2 o Test 3 falla con TIMEOUT:** Free Edition bloquea outbound a CoinGecko en tu workspace. Tienes tres opciones:
+**Si Test 2 o Test 3 falla con TIMEOUT:** Free Edition bloquea outbound a CoinGecko en tu workspace. Opciones:
 
-1. **Reportar y esperar:** los dominios trusted de Databricks cambian. Quizás en unas semanas funcione.
-2. **Probar otro API:** considera CoinCap (`api.coincap.io`) o Binance (`api.binance.com`). Si alguno funciona, modifica `src/pipelines/01_bronze.py` para apuntar a ese.
-3. **Volver a v1:** la versión anterior con ingester local funciona en cualquier caso. Está disponible en el repo bajo el tag `v1.0`.
+1. **Probar otro API:** considera CoinCap (`api.coincap.io`) o Binance (`api.binance.com`). Si alguno funciona, modifica `src/pipelines/01_bronze.py`.
+2. **Volver a v1:** la versión anterior con ingester local funciona en cualquier caso. Disponible en el repo bajo el tag `v1.0`.
 
-**Si Test 4 (PyPI) también falla:** tu cluster está mal. Reinicia el compute y vuelve a probar.
+**Si Test 4 (PyPI) también falla:** reinicia el cluster serverless y vuelve a probar.
 
 ---
 
 ## Parte D — Despliegue de infraestructura y pipeline
-
-Esta parte crea catálogo, schemas, pipeline y job en tu workspace en un solo `bundle deploy`.
 
 ### D.1 Validar el bundle
 
@@ -268,9 +301,7 @@ Esta parte crea catálogo, schemas, pipeline y job en tu workspace en un solo `b
 databricks bundle validate --profile crypto
 ```
 
-Salida esperada: `Validation OK!`
-
-Si hay errores, son típicamente de indentación YAML — revisa los espacios.
+Salida esperada: `Validation OK!` (sin errores). Si hay advertencias menores de YAML, revisa la indentación.
 
 ### D.2 Desplegar
 
@@ -282,28 +313,19 @@ Esto crea, en orden:
 - Catálogo `crypto`
 - Schemas `crypto.bronze`, `crypto.silver`, `crypto.gold`
 - Pipeline `crypto_medallion_dev`
-- Job `crypto_orchestrator_dev` (paused)
+- Job `crypto_orchestrator_dev` (pausado por defecto)
 
 Salida esperada (resumida):
-
 ```
-Building deployment plan...
-- catalog crypto                       (create)
-- schema  crypto.bronze                (create)
-- schema  crypto.silver                (create)
-- schema  crypto.gold                  (create)
-- pipeline crypto_medallion_dev        (create)
-- job crypto_orchestrator_dev          (create)
-
 Applying changes...
 Deployment complete!
 ```
 
 ### D.3 Verificar en la UI
 
-1. UI → Catalog. Debe aparecer `crypto` con `bronze`, `silver`, `gold`.
-2. UI → Workflows → Pipelines. Debe aparecer `crypto_medallion_dev`.
-3. UI → Workflows → Jobs. Debe aparecer `crypto_orchestrator_dev` (Status: PAUSED).
+1. UI → Catalog → `crypto` con `bronze`, `silver`, `gold`.
+2. UI → Workflows → Pipelines → `crypto_medallion_dev`.
+3. UI → Workflows → Jobs → `crypto_orchestrator_dev` (Status: PAUSED).
 
 ### D.4 Disparar el pipeline manualmente
 
@@ -312,9 +334,6 @@ databricks bundle run crypto_medallion --target dev --profile crypto
 ```
 
 O desde Claude Code:
-```
-claude
-```
 ```
 Usando el MCP, dispara una update en el pipeline crypto_medallion_dev y monitoréalo
 cada 30 segundos hasta que termine. Reporta cuántas filas se procesaron en cada capa.
@@ -354,11 +373,9 @@ Después de la primera corrida:
 - Bronze: 100 filas.
 - Silver: hasta 100 filas (si hubo dedup, puede ser menos).
 - Gold momentum: 100 filas, una por moneda, con ranking del 1 al 100.
-- Gold volatility: 0 filas (necesita 3 días de datos para empezar a poblar).
+- Gold volatility: 0 filas (necesita varios días de datos para poblar).
 
-> Para que Gold volatility tenga datos, necesitas que el Job corra varios días. Lo activamos en la Parte G.
-
-Si Bronze tiene 100 filas, el Custom Data Source funciona. ¡Felicidades, llegaste a la mitad del proyecto!
+Si Bronze tiene 100 filas, el Custom Data Source funciona.
 
 ---
 
@@ -371,8 +388,6 @@ Si Bronze tiene 100 filas, el Custom Data Source funciona. ¡Felicidades, llegas
 3. Espera 1-2 minutos hasta que esté RUNNING.
 
 ### F.2 Crear el Genie Space
-
-Free Edition todavía no expone el recurso `genie_spaces` en DAB de manera consistente, así que lo creamos vía Claude Code + MCP.
 
 Desde Claude Code:
 
@@ -387,8 +402,8 @@ Crea un Genie Space con esta configuración:
     - crypto.gold.coin_volatility_7d
     - crypto.silver.coin_prices
 
-Después agrega los siguientes knowledge snippets, leyéndolos
-de specs/04-genie.md sección "Knowledge snippets".
+Después agrega los knowledge snippets leyéndolos de specs/04-genie.md
+sección "Knowledge snippets".
 
 Y agrega las 3 sample queries de la sección "Sample queries (Trusted)"
 del mismo spec.
@@ -401,12 +416,12 @@ porcentajes a 2 decimales, pedir aclaración si la pregunta es ambigua.
 
 1. UI → Genie en el sidebar.
 2. Abre "Crypto Insights ES".
-3. Pruebas iniciales:
+3. Pruebas:
    - *"¿Cuáles son las 5 monedas con mayor subida hoy?"*
    - *"Top 10 monedas por capitalización de mercado."*
    - *"Dame el precio actual de Bitcoin."*
 
-Genie debe generar SQL legible, ejecutarlo, y devolverte una tabla con resultados.
+Genie debe generar SQL, ejecutarlo, y devolverte una tabla con resultados.
 
 ### F.4 Crear el AI/BI Dashboard
 
@@ -451,7 +466,7 @@ Verifica en UI → Dashboards → Crypto Overview.
 
 ## Parte G — Activar el Job para producción continua
 
-Por defecto, el Job está PAUSED. Esto te permitió desarrollar sin que se ejecute automáticamente. Cuando estés listo para producción continua:
+Por defecto el Job está PAUSED para que puedas desarrollar sin ejecuciones automáticas. Cuando estés listo:
 
 ### G.1 Editar el archivo del Job
 
@@ -475,7 +490,7 @@ databricks bundle deploy --target dev --profile crypto
 
 ### G.3 Verificar
 
-UI → Workflows → Jobs → `crypto_orchestrator_dev` debe estar **Active** (no Paused).
+UI → Workflows → Jobs → `crypto_orchestrator_dev` debe estar **Active**.
 
 A partir de este momento:
 - Cada 15 minutos, el Job dispara el pipeline.
@@ -483,13 +498,11 @@ A partir de este momento:
 - Bronze, Silver, Gold se actualizan.
 - Tu Dashboard y Genie tienen siempre datos frescos.
 
-Sin tu laptop encendida, sin cron, sin nada externo.
-
-### G.4 Commit Git (si es repo)
+### G.4 Commit Git
 
 ```powershell
 git add resources/jobs/crypto_orchestrator.yml
-git commit -m "chore: activate orchestrator job for production"
+git commit -m "chore: activate orchestrator job for continuous production"
 git push
 ```
 
@@ -497,13 +510,13 @@ git push
 
 ## Réplica en otro workspace Free Edition
 
-Para clonar el proyecto a un segundo workspace (otra cuenta Free):
+Para clonar el proyecto a un segundo workspace:
 
-### Paso R1 — Crear segunda cuenta Free Edition
+### R1 — Crear segunda cuenta Free Edition
 
-Con un email distinto al primero, repite la Parte A.
+Con un email distinto, repite la Parte A.
 
-### Paso R2 — Configurar segundo perfil CLI
+### R2 — Configurar segundo perfil CLI
 
 ```powershell
 databricks configure --profile crypto2 --token
@@ -511,43 +524,39 @@ databricks configure --profile crypto2 --token
 
 Con la URL y PAT del segundo workspace.
 
-### Paso R3 — Clonar el repo
+### R3 — Clonar el repo
 
 ```powershell
-cd ~
 git clone https://github.com/<tu-usuario>/crypto-pipeline-starter crypto-pipeline-replica
 cd crypto-pipeline-replica
 ```
 
-### Paso R4 — Editar `.mcp.json`
+### R4 — Configurar el host en `databricks.yml`
 
-Cambia el perfil de `crypto` a `crypto2` para que Claude Code use el nuevo workspace:
+Igual que en B.2 pero con la URL del segundo workspace.
 
-```json
-{
-  "mcpServers": {
-    "databricks": {
-      ...
-      "env": {
-        "DATABRICKS_CONFIG_PROFILE": "crypto2"
-      }
-    }
-  }
-}
+### R5 — Instalar el ai-dev-kit
+
+Desde dentro de `crypto-pipeline-replica`:
+
+```powershell
+irm https://raw.githubusercontent.com/databricks-solutions/ai-dev-kit/main/install.ps1 | iex
 ```
 
-### Paso R5 — Validar conectividad CoinGecko en el nuevo workspace
+Elige perfil `crypto2`.
 
-Repite la Parte C en el segundo workspace. La política de outbound podría ser diferente.
+### R6 — Validar CoinGecko en el nuevo workspace
 
-### Paso R6 — Desplegar
+Repite la Parte C. La política de outbound puede ser diferente entre workspaces.
+
+### R7 — Desplegar y correr
 
 ```powershell
 databricks bundle deploy --target dev --profile crypto2
 databricks bundle run crypto_medallion --target dev --profile crypto2
 ```
 
-### Paso R7 — Recrear Genie Space y Dashboard
+### R8 — Recrear Genie Space y Dashboard
 
 Reinicia Claude Code (para que cargue el nuevo `.mcp.json`) y repite la Parte F.
 
@@ -557,37 +566,28 @@ En menos de 15 minutos tienes el mismo pipeline corriendo en el segundo workspac
 
 ## Cómo usar Claude Code en este proyecto
 
-El flujo es **spec-driven**: tú escribes/lees specs, Claude propone implementaciones, tú apruebas, el MCP ejecuta.
+El flujo es **spec-driven**: lees specs, Claude propone implementaciones, tú apruebas, el MCP ejecuta.
 
 ### Tres tipos de prompts que vas a usar
 
-**1. Prompts de planificación (al inicio de cada cambio):**
-
+**1. Planificación (al inicio de cada cambio):**
 ```
 Lee specs/03-medallion.md y dime qué cambiarías en src/pipelines/02_silver.py
 para agregar el campo "circulating_supply" al Silver. NO escribas código todavía,
 solo el plan.
 ```
 
-Claude responde con un plan. Tú evalúas, ajustas.
-
-**2. Prompts de implementación (después de aprobar el plan):**
-
+**2. Implementación (después de aprobar el plan):**
 ```
 Procede con el plan. Modifica el spec primero, después el código,
-después el bundle si hace falta. Mostrame el diff de cada archivo.
+después el bundle si hace falta. Muéstrame el diff de cada archivo.
 ```
 
-Claude muestra los cambios. Tú revisas y apruebas.
-
-**3. Prompts de ejecución (cuando hay que tocar el workspace):**
-
+**3. Ejecución (cuando hay que tocar el workspace):**
 ```
 Despliega el bundle al target dev y dispara el pipeline. Reportame
 el resultado de cada paso.
 ```
-
-Claude llama el MCP. Antes de cada acción destructiva, espera tu confirmación.
 
 ### Ejemplos de prompts útiles
 
@@ -601,50 +601,39 @@ de observed_at? Dame las 5 monedas con mayor pct_change_24h ahora.
 ```
 El pipeline falló en Bronze con error de timeout a CoinGecko.
 Corre el notebook tests/integration/test_coingecko_databricks.py
-y dime qué pasa con la conectividad ahora.
+y dime qué pasa con la conectividad.
 ```
 
-**Refactor con specs:**
+**Nuevo feature con specs:**
 ```
-Quiero agregar una nueva vista Gold que calcule la correlación
-entre BTC y ETH en los últimos 7 días. Actualiza specs/01-data-contract.md
-y specs/03-medallion.md, después implementa src/pipelines/03_gold.py.
+Quiero agregar una vista Gold que calcule la correlación entre BTC y ETH
+en los últimos 7 días. Actualiza specs/01-data-contract.md y
+specs/03-medallion.md, después implementa src/pipelines/03_gold.py.
 ```
 
 ### Cómo funciona `CLAUDE.md`
 
-Cuando lanzas `claude` en la raíz del proyecto, automáticamente lee `CLAUDE.md` y carga las instrucciones que ahí defines. Para este proyecto, el `CLAUDE.md` ya está escrito y especifica:
-
-- El idioma de respuesta (español neutro).
-- El workflow obligatorio (lee specs primero, propón plan, espera aprobación).
-- Las skills relevantes a este proyecto.
-- Las reglas duras del MCP (no `DROP CATALOG`, no `bundle destroy` sin aprobación).
-- Las restricciones de Free Edition que no debe intentar saltar.
-- El patrón Custom Data Source para captura.
-
-Si en algún momento sientes que Claude responde con un patrón que no quieres, edita `CLAUDE.md` y reinicia Claude. Es el knob que controla todo.
+Cuando abres Claude Code en la raíz del proyecto, automáticamente lee `CLAUDE.md`. Ahí están definidos el idioma de respuesta, el workflow spec-driven, las skills, las reglas del MCP y las restricciones de Free Edition. Si quieres cambiar el comportamiento de Claude, edita `CLAUDE.md` y reinicia la sesión.
 
 ---
 
 ## Troubleshooting
 
-### El bundle deploy falla con "cannot create catalog"
+### El `bundle validate` falla con "host doesn't match"
+
+Ocurre cuando el `host` en `databricks.yml` no coincide con el del perfil CLI. Asegúrate de haber completado el paso B.2: abre `databricks.yml` y pon la URL real de tu workspace en `targets.dev.workspace.host`.
+
+### El `bundle deploy` falla con "cannot create catalog"
 
 Posibles causas:
 
-1. **El catálogo ya existe** y no eres su owner. Borra con `DROP CATALOG crypto CASCADE;` y redepliega.
+1. **El catálogo ya existe** y no eres su owner. Ejecuta `DROP CATALOG crypto CASCADE;` desde Claude Code y redepliega.
 2. **Tu PAT tiene scopes restringidos.** Genera uno nuevo sin scopes específicos.
-3. **Tu CLI es vieja.** Actualiza con el script del paso A.3.
-
-Si nada funciona, alternativa:
-
-1. Renombra `resources/schemas/crypto_catalog.yml` a `crypto_catalog.yml.disabled`.
-2. Desde Claude Code: `Ejecuta CREATE CATALOG IF NOT EXISTS crypto;`
-3. Redepliega.
+3. **Tu CLI es vieja.** Actualiza con el comando de instalación del paso A.3.
 
 ### El pipeline falla con "ModuleNotFoundError: pyspark.sql.datasource"
 
-La sintaxis de Custom Data Source requiere DBR 14.3+ con channel `PREVIEW`. Verifica `resources/pipelines/crypto_medallion.yml`:
+El Custom Data Source requiere DBR 14.3+ con channel `PREVIEW`. Verifica en `resources/pipelines/crypto_medallion.yml`:
 
 ```yaml
 channel: PREVIEW
@@ -654,41 +643,39 @@ Si está en `CURRENT`, cámbialo y redepliega.
 
 ### El pipeline falla con "Connection timeout" hacia CoinGecko
 
-Las reglas de outbound de Free Edition cambiaron, o CoinGecko está caído.
+1. Vuelve a correr `tests/integration/test_coingecko_databricks.py` para confirmar si el problema es la conectividad.
+2. Si CoinGecko no es alcanzable, considera revertir al patrón v1 con ingester local.
 
-1. Vuelve a correr `tests/integration/test_coingecko_databricks.py` para confirmar.
-2. Si CoinGecko está OK pero Databricks no lo alcanza, considera revertir al patrón v1 con ingester local.
+### El MCP no aparece en Claude Code
 
-### `claude /mcp` no muestra databricks
-
-1. Verificar que `.mcp.json` existe en la raíz del proyecto.
-2. Salir y volver a entrar a Claude Code.
-3. Verificar `where uv` (Windows) o `which uv` (Linux/Mac).
-4. Reinstalar el ai-dev-kit con `--force`.
+1. Verifica que `.mcp.json` existe en la raíz de `crypto-pipeline-starter` (no en la carpeta padre).
+2. Cierra y vuelve a abrir Claude Code para que recargue la configuración.
+3. Verifica que `uv` está instalado: `uv --version` en una terminal nueva.
+4. Si nada funciona, reinstala el ai-dev-kit desde dentro de la carpeta del proyecto.
 
 ### Bronze tiene 0 filas después del primer trigger
 
-1. Verifica el log del pipeline en UI → Workflows → Pipelines → `crypto_medallion_dev` → Updates → último update.
-2. Si dice "Source data source 'coingecko' not found": el `spark.dataSource.register()` falló. Verifica que `01_bronze.py` esté bien copiado.
-3. Si dice "Connection timeout": ver Troubleshooting anterior.
+1. Revisa el log: UI → Workflows → Pipelines → `crypto_medallion_dev` → Updates → último update.
+2. Si dice "Source data source 'coingecko' not found": verifica que `01_bronze.py` tiene `spark.dataSource.register(CoinGeckoDataSource)` antes del `@dp.table`.
+3. Si dice "Connection timeout": ver troubleshooting de CoinGecko arriba.
 
 ### CoinGecko devuelve 429 (rate limit)
 
-Improbable porque hacemos 1 request cada 15 min, muy por debajo del límite. Si pasa:
+Hacemos 1 request cada 15 min, muy por debajo del límite. Si ocurre igual:
 - Aumenta el intervalo del Job a 30 minutos en `crypto_orchestrator.yml`.
 - Considera obtener una API key Demo gratuita en https://www.coingecko.com/en/api.
 
 ### El warehouse del Genie no arranca
 
-UI → SQL Warehouses → Start. Si no arranca, revisa que tu cuota Free no se haya agotado (resetea al día siguiente UTC).
+UI → SQL Warehouses → Start. Si no arranca, tu cuota Free puede haberse agotado (resetea al día siguiente UTC).
 
 ### Genie no usa los knowledge snippets
 
-UI del Genie Space → Configure → asegúrate de hacer click en **Save** después de cualquier cambio. Los snippets aplican a la próxima conversación, no a la activa.
+UI del Genie Space → Configure → haz click en **Save** después de cualquier cambio. Los snippets aplican a la próxima conversación, no a la activa.
 
 ### El segundo workspace replicado no encuentra el catálogo
 
-Cada Free Edition tiene su propio metastore. El catálogo no se comparte entre cuentas. El bundle lo crea de nuevo cuando ejecutas `bundle deploy --profile crypto2`.
+Cada Free Edition tiene su propio metastore. El bundle crea el catálogo de nuevo al hacer `bundle deploy --profile crypto2`.
 
 ---
 
@@ -696,11 +683,11 @@ Cada Free Edition tiene su propio metastore. El catálogo no se comparte entre c
 
 ```
 1. Setup (A)              → CLI + uv + Claude Code + perfil
-2. Bootstrap (B)          → clone + ai-dev-kit + verificar MCP
+2. Bootstrap (B)          → clone + host en databricks.yml + ai-dev-kit + verificar MCP
 3. Validar CoinGecko (C)  → notebook test_coingecko_databricks.py
-4. Deploy (D)             → bundle deploy + bundle run
+4. Deploy (D)             → bundle validate + bundle deploy + bundle run
 5. Verificar (E)          → queries SQL en bronze/silver/gold
-6. Consumo (F)            → Genie Space + Dashboard via Claude
+6. Consumo (F)            → Genie Space + Dashboard via Claude Code
 7. Producción (G)         → activar Job (UNPAUSED)
 ```
 
@@ -711,5 +698,3 @@ Una vez completas el flujo, tu pipeline:
 - Es 100% reproducible vía `git clone` + `bundle deploy`.
 - Está gobernado por Unity Catalog.
 - Es consumible en lenguaje natural (Genie) y visual (Dashboard).
-
-Eso es lo que diferencia un proyecto de prueba de un pipeline de producción.

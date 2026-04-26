@@ -2,7 +2,7 @@
 
 ## Diseño general
 
-- **Bronze:** streaming table desde Auto Loader sobre el Volume.
+- **Bronze:** streaming table desde un PySpark Custom Data Source que llama directamente a la API de CoinGecko.
 - **Silver:** streaming table con typing, dedup, expectations.
 - **Gold:** vistas materializadas (no streaming) para los KPIs.
 
@@ -16,16 +16,17 @@
 
 ## Bronze — reglas
 
-- Auto Loader format: `json`.
-- Schema location: `/Volumes/crypto/raw/_schemas/bronze/`.
-- Schema evolution: `addNewColumns`.
+- Source: `CoinGeckoDataSource` (clase Python registrada en el pipeline).
+- Cada microbatch del Job ejecuta una llamada a `api.coingecko.com/api/v3/coins/markets` y produce 100 filas.
+- Cada fila lleva un `snapshot_id` (timestamp UTC) que identifica unívocamente la captura.
 - Conserva el JSON crudo en columna `payload`.
+- Append-only.
 
 ## Silver — reglas
 
 - Lee de `crypto.bronze.coin_prices_raw` como streaming.
 - Extrae cada campo del payload con `selectExpr` y notación `:`.
-- Aplica `dropDuplicatesWithinWatermark` con ventana 1 min en (`symbol`, `observed_at`).
+- Aplica `dropDuplicatesWithinWatermark` con ventana 1 min en (`symbol`, `snapshot_id`).
 - Watermark: 1 hora.
 - Liquid Clustering por `symbol`.
 

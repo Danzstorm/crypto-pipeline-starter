@@ -19,29 +19,36 @@
 }
 ```
 
-## Por qué corre en local y no en Databricks
+## Patrón de ingesta
 
-Databricks Free Edition restringe el outbound del cómputo serverless a un set acotado de dominios "trusted". CoinGecko no está garantizado en esa lista.
+CoinGecko devuelve un **snapshot completo** en cada llamada (estado actual de las 100 monedas top). No hay un endpoint incremental ni eventos. Por lo tanto:
 
-Solución: el ingester corre en la laptop. Captura el JSON, lo escribe localmente, lo sube al Volume vía Files API (que sí es trusted). SDP lee del Volume internamente.
+- Cada captura agrega 100 filas nuevas a Bronze, etiquetadas con un `snapshot_id` (timestamp UTC del momento de la captura).
+- Bronze crece linealmente: ~100 filas × 96 capturas/día = ~9,600 filas/día. Trivial para Free Edition.
+- Silver deduplica por `(symbol, snapshot_id)` con ventana corta para protegerse de re-ejecuciones del Job.
+- Gold lee solo el snapshot más reciente por símbolo para los KPIs.
 
-Este patrón también es buena práctica en producción real: separa captura de procesamiento.
+## Implementación: PySpark Custom Data Source
 
-## Cadencia y particionado
+La captura se hace con una clase Python `CoinGeckoDataSource` que extiende `pyspark.sql.datasource.DataSource`. SDP la trata como cualquier otra streaming source. Beneficios:
 
-- Frecuencia: cada 10 minutos (manual durante el desarrollo).
-- Path destino: `/Volumes/crypto/raw/coin_prices/dt=YYYY-MM-DD/hh=HH/<uuid>.jsonl`
-- Formato: JSON Lines (un JSON object por línea).
-- Tamaño esperado: ~80 KB por archivo, ~14 MB/día.
+- No necesitamos Volume intermedio.
+- No necesitamos cron externo: el Job de Databricks dispara el pipeline y el data source captura automáticamente.
+- Schema declarado, así Spark valida la respuesta de la API.
+- Re-intentos automáticos si la API falla en una ejecución (el siguiente trigger del Job lo intenta de nuevo).
+
+## Cadencia
+
+- Frecuencia: cada 15 minutos vía Lakeflow Job.
+- Cada ejecución del Job → 1 llamada a CoinGecko → 100 filas nuevas en Bronze.
+- 96 capturas por día = 9,600 filas/día en Bronze.
 
 ## Resiliencia
 
-- 3 intentos con backoff exponencial (1s, 2s, 4s).
-- Si los 3 fallan: escribir a `/Volumes/crypto/raw/_dead_letter/` con el error.
-- Logs con timestamp ISO 8601 a stdout.
+- 3 intentos con backoff exponencial dentro del data source.
+- Si los 3 intentos fallan, el batch falla y el Job notifica por email.
+- El siguiente trigger lo retoma sin pérdida de datos (es snapshot, no eventos).
 
-## Autenticación
+## Por qué esto funciona en Free Edition
 
-- Variable de entorno: `DATABRICKS_CONFIG_PROFILE=crypto`.
-- El SDK lee `~/.databrickscfg` automáticamente.
-- No hardcodear el PAT en el código bajo ninguna circunstancia.
+Validado empíricamente con `test_coingecko_databricks.py`: el cómputo serverless de Free Edition puede alcanzar `api.coingecko.com` con `requests` estándar. Si en el futuro Databricks cambia las reglas de outbound, este componente sería el primero en romperse y habría que volver al patrón "ingester local + Volume" de la v1.

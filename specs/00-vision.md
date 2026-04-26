@@ -19,7 +19,7 @@ Como analista financiero quiero entender en tiempo casi real qué criptomonedas 
 
 ## SLA
 
-- Latencia de Bronze a Gold ≤ 5 minutos después de cada ingesta.
+- Latencia de Bronze a Gold ≤ 5 minutos después de cada captura.
 - Frescura del Gold ≤ 15 minutos.
 - Cobertura ≥ 100 monedas top por market cap.
 
@@ -33,7 +33,16 @@ Como analista financiero quiero entender en tiempo casi real qué criptomonedas 
 
 - **Cómputo:** Databricks Free Edition (serverless).
 - **Gobernanza:** Unity Catalog.
-- **Pipeline:** Lakeflow Spark Declarative Pipelines.
+- **Pipeline:** Lakeflow Spark Declarative Pipelines con PySpark Custom Data Source.
 - **Consumo:** AI/BI Genie + Dashboard.
-- **Orquestación:** Lakeflow Jobs cada 15 min.
-- **Ingesta:** script Python local que sube JSONL al Volume vía Files API (workaround para outbound restringido en Free Edition).
+- **Orquestación:** Lakeflow Job cada 15 min.
+- **Ingesta:** captura directa desde el pipeline a `api.coingecko.com` (validado en notebook de prueba). Sin ingester local.
+
+## Por qué cambió la arquitectura (vs v1)
+
+La v1 asumía que Free Edition restringía outbound a un set acotado de dominios "trusted", lo cual está documentado oficialmente. Validamos empíricamente con un notebook de prueba que `api.coingecko.com` es alcanzable desde el cómputo serverless. Eso nos permite:
+
+- Eliminar el ingester local (no más cron en laptop).
+- Eliminar el Volume `crypto.raw.coin_prices` y el schema `crypto.raw`.
+- Simplificar a 3 capas (Bronze, Silver, Gold).
+- Tener un proyecto 100% reproducible: clonar el repo + `databricks bundle deploy` y todo arranca.

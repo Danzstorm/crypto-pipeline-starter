@@ -4,21 +4,23 @@ Este archivo lo lee Claude Code automáticamente al iniciarse en esta carpeta. D
 
 ## Qué es este proyecto
 
-Pipeline financiero end-to-end de precios de criptomonedas en Databricks Free Edition:
+Pipeline financiero end-to-end de precios de criptomonedas en Databricks Free Edition, **100% self-contained**:
 
-- **Ingesta:** script Python local que captura precios de CoinGecko cada 10 min y los sube a un Volume de Unity Catalog vía Files API.
-- **Procesamiento:** Lakeflow Spark Declarative Pipelines (SDP) con arquitectura medallion: Bronze (JSON crudo) → Silver (tipado, deduplicado) → Gold (vistas materializadas con KPIs).
+- **Ingesta:** capturada directamente desde el pipeline via PySpark Custom Data Source que llama a CoinGecko. Sin ingester local, sin cron en laptop.
+- **Procesamiento:** Lakeflow Spark Declarative Pipelines (SDP) con arquitectura medallion: Bronze (snapshots crudos) → Silver (tipado, deduplicado) → Gold (vistas materializadas con KPIs).
 - **Consumo:** AI/BI Genie Space en español + AI/BI Dashboard.
 - **Orquestación:** Lakeflow Job que dispara el pipeline cada 15 minutos.
 - **Gobernanza:** Unity Catalog (catálogo `crypto`).
 - **Infraestructura como código:** Databricks Asset Bundle (DAB) en `resources/` y `databricks.yml`.
+
+> **Validación previa de la arquitectura:** el notebook `tests/integration/test_coingecko_databricks.py` confirma que `api.coingecko.com` es alcanzable desde el cómputo serverless de Free Edition. Si en algún workspace ese test falla, considerar revertir a la v1 con ingester local.
 
 ## Idioma y tono
 
 - Responde **siempre en español neutro** (sin localismos regionales). Usa "tú" en segunda persona.
 - En los snippets de código, mantén comentarios en español también.
 - En los nombres de variables, columnas y archivos, usa inglés `snake_case`.
-- Los mensajes de log, igualmente en inglés (`Fetched`, `Uploaded`, etc.) — convención técnica estándar.
+- Los mensajes de log, igualmente en inglés (`Fetched`, `Processed`, etc.) — convención técnica estándar.
 
 ## Workflow obligatorio: spec-driven development
 
@@ -26,7 +28,7 @@ Antes de implementar cualquier cosa, lee los specs. La fuente de verdad del proy
 
 1. `specs/00-vision.md` — qué resolvemos, KPIs, SLAs.
 2. `specs/01-data-contract.md` — schemas Bronze/Silver/Gold.
-3. `specs/02-ingestion.md` — fuente, cadencia, paths.
+3. `specs/02-ingestion.md` — fuente, cadencia, patrón Custom Data Source.
 4. `specs/03-medallion.md` — reglas SDP, expectations.
 5. `specs/04-genie.md` — knowledge snippets y sample queries del Genie Space.
 6. `specs/05-runbook.md` — operación diaria y troubleshooting.
@@ -47,7 +49,7 @@ Las skills del `ai-dev-kit` están en `.claude/skills/`. Para este pipeline, las
 - `databricks-config` (siempre cargada)
 - `databricks-docs` (siempre cargada)
 - `databricks-unity-catalog`
-- `databricks-spark-declarative-pipelines` — patrones SDP, AUTO CDC, Auto Loader
+- `databricks-spark-declarative-pipelines` — patrones SDP, AUTO CDC, Custom Data Sources
 - `databricks-asset-bundles` — DAB
 - `databricks-jobs` — workflows
 - `databricks-genie` — Genie Spaces vía Conversation API
@@ -64,7 +66,6 @@ El MCP server de Databricks corre localmente y expone ~75 herramientas. Las que 
 | `execute_sql` | Inspeccionar tablas, debug, queries ad-hoc. Para SELECT/SHOW. |
 | `list_warehouses`, `get_best_warehouse` | Antes de crear Genie Spaces o dashboards. |
 | `get_table_details` | Verificar esquemas reales antes de modificar specs. |
-| `upload_file`, `upload_folder` | NO usar para data ingestada — eso es responsabilidad del ingester local. Solo para artefactos de configuración. |
 | `execute_databricks_command` | Para ejecutar `databricks bundle validate/deploy/run` desde dentro de Claude Code. |
 | `list_tracked_resources`, `delete_tracked_resource` | Para limpiar recursos huérfanos al final del proyecto o entre experimentos. |
 
@@ -79,7 +80,7 @@ Reglas duras del MCP:
 ### Naming
 
 - Catálogo único: `crypto`.
-- Schemas: `raw`, `bronze`, `silver`, `gold`.
+- Schemas: `bronze`, `silver`, `gold` (sin `raw` — eliminado en v2).
 - Tablas/vistas en `snake_case`: `coin_prices_raw`, `coin_momentum_24h`.
 - Recursos del bundle: usa el sufijo `${bundle.target}` (ej. `crypto_medallion_dev`).
 
@@ -87,9 +88,10 @@ Reglas duras del MCP:
 
 - Specs en `specs/`. Versionados, fuente de verdad.
 - Código del pipeline en `src/pipelines/`. Numerado por capa (`01_bronze.py`, `02_silver.py`, `03_gold.py`).
-- Ingester en `src/ingestion/`. Corre LOCAL, nunca en Databricks.
+- Bronze contiene la clase `CoinGeckoDataSource` que implementa la captura.
 - Recursos del bundle en `resources/<tipo>/`. Un YAML por recurso.
 - `databricks.yml` solo en la raíz, con `include:` apuntando a `resources/`.
+- Tests en `tests/`. Unitarios en `tests/unit/`, de integración (incluye notebook de validación de CoinGecko) en `tests/integration/`.
 
 ### Workflow Git
 
@@ -98,7 +100,7 @@ Reglas duras del MCP:
   - `fix: ...` para correcciones.
   - `docs: ...` para specs y documentación.
   - `chore: ...` para configuración.
-- No uses GitHub a menos que el usuario lo pida explícitamente.
+- Para cambios mayores, sugiere usar branch + PR. Para cambios menores, push directo a `main` está bien.
 
 ### Targets del bundle
 
@@ -107,11 +109,24 @@ Reglas duras del MCP:
 
 ## Restricciones de Free Edition que NO debes intentar saltar
 
-- **Outbound limitado:** no escribas código que llame APIs externas desde el cómputo de Databricks. La ingesta es siempre local.
+- **Outbound limitado:** Free Edition restringe el outbound serverless. Validamos en `tests/integration/test_coingecko_databricks.py` que CoinGecko sí es alcanzable. Para cualquier OTRO API externo, sugiere correr un test similar antes de asumir conectividad. Si una API no es alcanzable, vuelve al patrón "ingester local + Volume" de la v1.
 - **1 pipeline activo por tipo:** no propongas múltiples pipelines paralelos.
 - **1 SQL warehouse 2X-Small:** no propongas crear warehouses adicionales.
 - **5 tareas de job concurrentes:** no propongas DAGs masivos.
 - **Sin Knowledge Assistants ni Supervisor Agents:** si la solución sugiere agentes multi-paso encima de los datos, marca el límite y propone Genie Space como alternativa.
+
+## El patrón Custom Data Source (importante)
+
+El archivo `src/pipelines/01_bronze.py` implementa una clase `CoinGeckoDataSource` que extiende `pyspark.sql.datasource.DataSource`. Esto es lo que reemplaza al ingester local.
+
+Si el usuario te pide cambios en la captura (otra API, otros parámetros, schema diferente), modifica esa clase. Mantén siempre estos cuatro métodos:
+
+- `name()` — identificador único del data source (ej. `"coingecko"`).
+- `schema()` — define columnas y tipos.
+- `reader()` — devuelve la instancia del Reader.
+- `Reader.read()` — generador que produce las filas.
+
+Y siempre registra el data source con `spark.dataSource.register(CoinGeckoDataSource)` antes de declarar la `@dp.table`.
 
 ## Cómo presentar resultados
 
@@ -129,6 +144,6 @@ Si trabajas en uno de esos, copia el contenido de este archivo al equivalente.
 
 ---
 
-**Versión:** 1.0
+**Versión:** 2.0
 **Última actualización:** abril 2026
-**Mantenedor:** [tu nombre]
+**Mantenedor:** Daniel Santos

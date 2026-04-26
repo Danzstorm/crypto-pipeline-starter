@@ -1,5 +1,7 @@
 """
 Capa Gold — vistas materializadas con KPIs.
+
+Sin cambios respecto a v1 — Silver sigue exponiendo observed_at.
 """
 
 from pyspark import pipelines as dp

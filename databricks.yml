@@ -3,7 +3,6 @@ bundle:
 
 include:
   - resources/schemas/*.yml
-  - resources/volumes/*.yml
   - resources/pipelines/*.yml
   - resources/jobs/*.yml
   - resources/dashboards/*.yml

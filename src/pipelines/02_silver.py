@@ -13,7 +13,7 @@ from pyspark import pipelines as dp
         "delta.enableChangeDataFeed": "true",
     },
     cluster_by=["symbol"],
-    comment="Precios tipados y deduplicados por (symbol, observed_at).",
+    comment="Precios tipados y deduplicados por (symbol, snapshot_id).",
 )
 @dp.expect("price_positive", "price_usd > 0")
 @dp.expect_or_drop("symbol_not_null", "symbol IS NOT NULL")
@@ -30,7 +30,7 @@ def coin_prices():
             "CAST(payload:price_change_percentage_1h_in_currency AS DOUBLE) AS pct_change_1h",
             "CAST(payload:price_change_percentage_24h AS DOUBLE) AS pct_change_24h",
             "CAST(payload:price_change_percentage_7d_in_currency AS DOUBLE) AS pct_change_7d",
-            "_ingestion_ts AS observed_at",
+            "snapshot_id AS observed_at",
         )
         .withWatermark("observed_at", "1 hour")
         .dropDuplicatesWithinWatermark(["symbol", "observed_at"], "1 minute")

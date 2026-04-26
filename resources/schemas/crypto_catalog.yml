@@ -1,5 +1,0 @@
-resources:
-  catalogs:
-    crypto:
-      name: ${var.catalog}
-      comment: "Pipeline crypto - webinar v2 (self-contained)"

@@ -295,22 +295,34 @@ El notebook ejecuta cuatro tests:
 
 ## Parte D — Despliegue de infraestructura y pipeline
 
-### D.1 Validar el bundle
+El bundle gestiona schemas, pipeline y job. El catálogo se crea una sola vez vía SQL antes del primer deploy — los recursos de tipo `catalog` en DABs requieren un motor especial que complica el setup, así que seguimos el patrón recomendado: crear el catálogo primero y dejarlo fuera del bundle.
+
+### D.1 Crear el catálogo (una sola vez)
+
+Desde Claude Code, escribe en el chat:
+
+```
+Ejecuta este SQL en el warehouse:
+CREATE CATALOG IF NOT EXISTS crypto;
+```
+
+Claude lo ejecutará vía MCP. Solo necesitas hacerlo una vez por workspace.
+
+### D.2 Validar el bundle
 
 ```powershell
 databricks bundle validate --profile crypto
 ```
 
-Salida esperada: `Validation OK!` (sin errores). Si hay advertencias menores de YAML, revisa la indentación.
+Salida esperada: `Validation OK!` sin errores.
 
-### D.2 Desplegar
+### D.3 Desplegar
 
 ```powershell
 databricks bundle deploy --target dev --profile crypto
 ```
 
 Esto crea, en orden:
-- Catálogo `crypto`
 - Schemas `crypto.bronze`, `crypto.silver`, `crypto.gold`
 - Pipeline `crypto_medallion_dev`
 - Job `crypto_orchestrator_dev` (pausado por defecto)
@@ -321,7 +333,7 @@ Applying changes...
 Deployment complete!
 ```
 
-### D.3 Verificar en la UI
+### D.4 Verificar en la UI
 
 1. UI → Catalog → `crypto` con `bronze`, `silver`, `gold`.
 2. UI → Workflows → Pipelines → `crypto_medallion_dev`.
@@ -622,6 +634,10 @@ Cuando abres Claude Code en la raíz del proyecto, automáticamente lee `CLAUDE.
 ### El `bundle validate` falla con "host doesn't match"
 
 Ocurre cuando el `host` en `databricks.yml` no coincide con el del perfil CLI. Asegúrate de haber completado el paso B.2: abre `databricks.yml` y pon la URL real de tu workspace en `targets.dev.workspace.host`.
+
+### El `bundle deploy` falla con "Catalog resources are only supported with direct deployment mode"
+
+El catálogo no debe estar declarado en el bundle. Asegúrate de haber eliminado `resources/schemas/crypto_catalog.yml` del proyecto y de haber creado el catálogo manualmente con `CREATE CATALOG IF NOT EXISTS crypto;` antes del deploy (paso D.1).
 
 ### El `bundle deploy` falla con "cannot create catalog"
 

@@ -79,7 +79,7 @@ Reglas duras del MCP:
 
 ### Naming
 
-- Catálogo único: `crypto`.
+- Catálogo único: `crypto`. **El catálogo se crea una sola vez vía SQL (`CREATE CATALOG IF NOT EXISTS crypto;`) y no se declara en el bundle** — los recursos `catalog` en DABs requieren motor especial y complican el setup.
 - Schemas: `bronze`, `silver`, `gold` (sin `raw` — eliminado en v2).
 - Tablas/vistas en `snake_case`: `coin_prices_raw`, `coin_momentum_24h`.
 - Recursos del bundle: usa el sufijo `${bundle.target}` (ej. `crypto_medallion_dev`).
@@ -89,8 +89,8 @@ Reglas duras del MCP:
 - Specs en `specs/`. Versionados, fuente de verdad.
 - Código del pipeline en `src/pipelines/`. Numerado por capa (`01_bronze.py`, `02_silver.py`, `03_gold.py`).
 - Bronze contiene la clase `CoinGeckoDataSource` que implementa la captura.
-- Recursos del bundle en `resources/<tipo>/`. Un YAML por recurso.
-- `databricks.yml` solo en la raíz, con `include:` apuntando a `resources/`.
+- Recursos del bundle en `resources/<tipo>/`. Un YAML por recurso. **No existe `crypto_catalog.yml`** — el catálogo se gestiona fuera del bundle.
+- `databricks.yml` en la raíz, con `include:` apuntando a `resources/`. El campo `targets.dev.workspace.host` tiene la URL real del workspace (no una variable dinámica).
 - Tests en `tests/`. Unitarios en `tests/unit/`, de integración (incluye notebook de validación de CoinGecko) en `tests/integration/`.
 
 ### Workflow Git

@@ -34,17 +34,20 @@ Todo corre **dentro de Databricks**. Sin scripts locales, sin cron, sin ingester
 
 ## Empezar
 
-Sigue la guía de implementación paso a paso (`guia.md`). Los pasos clave:
+Sigue la guía de implementación paso a paso (`docs/guia_implementacion.md`). Los pasos clave:
 
 1. Crear cuenta Databricks Free Edition + PAT.
-2. Instalar Databricks CLI, `uv`, Claude Code.
-3. `git clone` este repo.
-4. Instalar el `ai-dev-kit` desde dentro de la carpeta.
-5. Configurar perfil CLI `crypto`.
-6. (Opcional pero recomendado) Correr `tests/integration/test_coingecko_databricks.py` en un notebook para validar que CoinGecko es alcanzable desde tu workspace.
-7. `databricks bundle deploy --target dev --profile crypto`.
-8. `databricks bundle run crypto_medallion --target dev --profile crypto`.
-9. Crear Genie Space y Dashboard vía Claude Code.
+2. Instalar Databricks CLI `0.278.0+`, `uv`, Claude Code.
+3. `git clone` este repo y entrar a la carpeta `crypto-pipeline-starter`.
+4. Editar `databricks.yml` y poner la URL real del workspace en `targets.dev.workspace.host`.
+5. Instalar el `ai-dev-kit` **desde dentro de la carpeta** con `irm https://raw.githubusercontent.com/databricks-solutions/ai-dev-kit/main/install.ps1 | iex` (Windows) o el equivalente bash (macOS/Linux).
+6. Configurar perfil CLI `crypto` con `databricks configure --profile crypto --token`.
+7. (Recomendado) Correr `tests/integration/test_coingecko_databricks.py` en un notebook para validar conectividad a CoinGecko.
+8. Desde Claude Code, ejecutar `CREATE CATALOG IF NOT EXISTS crypto;` vía MCP.
+9. `databricks bundle validate --profile crypto`.
+10. `databricks bundle deploy --target dev --profile crypto`.
+11. `databricks bundle run crypto_medallion --target dev --profile crypto`.
+12. Crear Genie Space y Dashboard vía Claude Code.
 
 ## Estructura
 
@@ -68,8 +71,7 @@ crypto-pipeline-starter/
 │       └── 03_gold.py
 ├── resources/                 # Bundle declarativo
 │   ├── schemas/
-│   │   ├── crypto_catalog.yml
-│   │   └── crypto_schemas.yml
+│   │   └── crypto_schemas.yml  # Catálogo creado vía SQL, no en el bundle
 │   ├── pipelines/
 │   │   └── crypto_medallion.yml
 │   ├── jobs/
@@ -94,12 +96,19 @@ databricks configure --profile crypto2 --token
 git clone https://github.com/danzstorm/crypto-pipeline-starter crypto-pipeline-replica
 cd crypto-pipeline-replica
 
-# 4. Editar .mcp.json para apuntar al perfil crypto2
+# 4. Editar databricks.yml: poner la URL del segundo workspace en targets.dev.workspace.host
 
-# 5. Desplegar
+# 5. Instalar ai-dev-kit (desde dentro de la carpeta) eligiendo perfil crypto2
+irm https://raw.githubusercontent.com/databricks-solutions/ai-dev-kit/main/install.ps1 | iex
+
+# 6. Crear el catálogo en el segundo workspace (desde Claude Code vía MCP)
+# CREATE CATALOG IF NOT EXISTS crypto;
+
+# 7. Desplegar
+databricks bundle validate --profile crypto2
 databricks bundle deploy --target dev --profile crypto2
 
-# 6. Disparar
+# 8. Disparar
 databricks bundle run crypto_medallion --target dev --profile crypto2
 ```
 

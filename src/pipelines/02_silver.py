@@ -6,8 +6,7 @@ from pyspark import pipelines as dp
 
 
 @dp.table(
-    name="coin_prices",
-    schema="crypto.silver",
+    name="silver.coin_prices",
     table_properties={
         "quality": "silver",
         "delta.enableChangeDataFeed": "true",
@@ -19,7 +18,7 @@ from pyspark import pipelines as dp
 @dp.expect_or_drop("symbol_not_null", "symbol IS NOT NULL")
 @dp.expect("valid_market_cap", "market_cap_usd >= 0")
 def coin_prices():
-    bronze = spark.readStream.table("crypto.bronze.coin_prices_raw")
+    bronze = spark.readStream.table("LIVE.coin_prices_raw")
     return (
         bronze.selectExpr(
             "UPPER(payload:symbol::string) AS symbol",
@@ -33,5 +32,5 @@ def coin_prices():
             "snapshot_id AS observed_at",
         )
         .withWatermark("observed_at", "1 hour")
-        .dropDuplicatesWithinWatermark(["symbol", "observed_at"], "1 minute")
+        .dropDuplicatesWithinWatermark(["symbol", "observed_at"])
     )

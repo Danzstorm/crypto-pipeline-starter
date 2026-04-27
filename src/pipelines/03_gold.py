@@ -8,8 +8,7 @@ from pyspark import pipelines as dp
 
 
 @dp.materialized_view(
-    name="coin_momentum_24h",
-    schema="crypto.gold",
+    name="gold.coin_momentum_24h",
     comment="Último estado de cada moneda con ranking de momentum.",
 )
 def coin_momentum_24h():
@@ -21,7 +20,7 @@ def coin_momentum_24h():
                    PARTITION BY symbol
                    ORDER BY observed_at DESC
                  ) AS rn
-          FROM crypto.silver.coin_prices
+          FROM LIVE.silver.coin_prices
           WHERE observed_at >= current_timestamp() - INTERVAL 24 HOURS
         )
         SELECT symbol,
@@ -39,8 +38,7 @@ def coin_momentum_24h():
 
 
 @dp.materialized_view(
-    name="coin_volatility_7d",
-    schema="crypto.gold",
+    name="gold.coin_volatility_7d",
     comment="Volatilidad realizada anualizada en los últimos 7 días.",
 )
 def coin_volatility_7d():
@@ -50,7 +48,7 @@ def coin_volatility_7d():
           SELECT symbol,
                  DATE(observed_at) AS day,
                  (MAX(price_usd) - MIN(price_usd)) / MIN(price_usd) AS daily_return
-          FROM crypto.silver.coin_prices
+          FROM LIVE.silver.coin_prices
           WHERE observed_at >= current_timestamp() - INTERVAL 7 DAYS
           GROUP BY symbol, DATE(observed_at)
         )

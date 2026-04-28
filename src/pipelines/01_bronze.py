@@ -21,7 +21,7 @@ from typing import Iterator
 
 import requests
 from pyspark import pipelines as dp
-from pyspark.sql.datasource import DataSource, DataSourceReader, InputPartition
+from pyspark.sql.datasource import DataSource, DataSourceReader, DataSourceStreamReader, InputPartition
 from pyspark.sql.types import StructType, StructField, StringType, TimestampType
 
 
@@ -56,6 +56,35 @@ class CoinGeckoDataSource(DataSource):
 
     def reader(self, schema: StructType) -> DataSourceReader:
         return CoinGeckoReader(schema)
+
+    def streamReader(self, schema: StructType) -> "CoinGeckoStreamReader":
+        return CoinGeckoStreamReader(schema)
+
+
+class CoinGeckoStreamReader(DataSourceStreamReader):
+    """Stream reader para SDP: cada microbatch llama una vez a CoinGecko."""
+
+    def __init__(self, schema: StructType):
+        self.schema = schema
+
+    def initialOffset(self) -> dict:
+        return {"timestamp": 0}
+
+    def latestOffset(self) -> dict:
+        return {"timestamp": int(dt.datetime.utcnow().timestamp())}
+
+    def partitions(self, start: dict, end: dict) -> list[InputPartition]:
+        return [InputPartition(0)]
+
+    def read(self, partition: InputPartition) -> Iterator[tuple]:
+        rows = _fetch_with_retry()
+        snapshot_id = dt.datetime.utcnow()
+        source = "coingecko-api-v3"
+        for row in rows:
+            yield (snapshot_id, json.dumps(row, ensure_ascii=False), source)
+
+    def commit(self, end: dict) -> None:
+        pass
 
 
 class CoinGeckoReader(DataSourceReader):

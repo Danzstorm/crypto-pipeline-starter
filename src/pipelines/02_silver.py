@@ -18,6 +18,7 @@ from pyspark import pipelines as dp
 @dp.expect_or_drop("symbol_not_null", "symbol IS NOT NULL")
 @dp.expect("valid_market_cap", "market_cap_usd >= 0")
 def coin_prices():
+    # Streaming read desde Bronze (Delta MV soporta readStream via CDF).
     bronze = spark.readStream.table("LIVE.coin_prices_raw")
     return (
         bronze.selectExpr(
